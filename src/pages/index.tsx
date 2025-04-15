@@ -1,7 +1,7 @@
 import { useSession, signIn, signOut } from 'next-auth/react';
 
 function AuthContent() {
-  const { data: session, status } = useSession();
+  const { data: session, status, ...rest } = useSession();
 
   if (status === 'loading') {
     return <p>Loading...</p>;
@@ -12,6 +12,9 @@ function AuthContent() {
       <div className="flex flex-col items-center gap-4">
         <h1 className="text-2xl font-bold">Welcome!</h1>
         <p>Signed in as {session.user?.email}</p>
+        <pre className="text-xs max-w-4xl break-all">
+          {JSON.stringify({ ...session, ...rest, status }, null, 2)}
+        </pre>
         <button
           onClick={() => signOut()}
           className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"

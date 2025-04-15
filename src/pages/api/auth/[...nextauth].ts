@@ -4,11 +4,41 @@ import AzureADB2CProvider, {
   type AzureB2CProfile,
 } from 'next-auth/providers/azure-ad-b2c';
 
-// Add this type declaration
+interface CustomJWT extends JWT {
+  idToken?: string;
+  id?: string;
+  email?: string | null;
+  firstName?: string;
+  lastName?: string;
+  userType?: string;
+  pid?: string;
+  oid?: string;
+}
+
 interface CustomSession extends Session {
   idToken?: string;
   id?: string;
+  email?: string | null;
+  firstName?: string;
+  lastName?: string;
+  userType?: string;
+  pid?: string;
+  oid?: string;
 }
+
+const XML_CLAIMS = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/';
+const JCAHO_CLAIMS = 'http://schemas.jcaho.org/2009/06/claims/';
+
+const getProfile = (oauthProfile: AzureB2CProfile) => ({
+  id: oauthProfile.sub || oauthProfile.oid,
+  name: oauthProfile[XML_CLAIMS + 'displayName'],
+  email: oauthProfile[XML_CLAIMS + 'emailaddress'],
+  firstName: oauthProfile[XML_CLAIMS + 'givenname'],
+  lastName: oauthProfile[XML_CLAIMS + 'surname'],
+  userType: oauthProfile[JCAHO_CLAIMS + 'usertype'],
+  pid: oauthProfile[JCAHO_CLAIMS + 'pid'],
+  oid: oauthProfile[JCAHO_CLAIMS + 'oid'],
+});
 
 export const authOptions: AuthOptions = {
   // Configure one or more authentication providers
@@ -18,7 +48,12 @@ export const authOptions: AuthOptions = {
       clientId: String(process.env.AZURE_AD_B2C_CLIENT_ID),
       clientSecret: String(process.env.AZURE_AD_B2C_CLIENT_SECRET),
       primaryUserFlow: String(process.env.AZURE_AD_B2C_PRIMARY_USER_FLOW),
-      authorization: { params: { scope: 'offline_access openid' } },
+      authorization: { params: { scope: 'openid' } },
+      checks: ['pkce'],
+      client: {
+        token_endpoint_auth_method: 'none',
+      },
+      profile: getProfile,
     }),
   ],
   secret: process.env.NEXTAUTH_SECRET,
@@ -35,7 +70,7 @@ export const authOptions: AuthOptions = {
       account,
       profile,
     }: {
-      token: JWT;
+      token: CustomJWT;
       account: Account | null;
       profile?: Profile;
     }) {
@@ -43,7 +78,8 @@ export const authOptions: AuthOptions = {
         token.idToken = account.id_token;
       }
       if (profile) {
-        token.id = (profile as AzureB2CProfile).oid;
+        const profileData = getProfile(profile as AzureB2CProfile);
+        Object.assign(token, profileData);
       }
       return token;
     },
@@ -52,11 +88,16 @@ export const authOptions: AuthOptions = {
       token,
     }: {
       session: CustomSession;
-      token: JWT & { idToken?: string; id?: string };
+      token: CustomJWT;
     }) {
-      // Remove user parameter since we don't need it
       session.idToken = token.idToken;
       session.id = token.id;
+      session.email = token.email;
+      session.firstName = token.firstName;
+      session.lastName = token.lastName;
+      session.userType = token.userType;
+      session.pid = token.pid;
+      session.oid = token.oid;
       return session;
     },
   },
